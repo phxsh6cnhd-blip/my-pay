@@ -17,7 +17,7 @@ st.markdown("""
 
 # 설정
 HOURLY_WAGE = 15000 
-TEMP_FILE = "temp_work_v20.csv"
+TEMP_FILE = "temp_work_v21.csv"
 DATA_FILE = "work_log_final_v2.csv"
 
 # 파일 초기화
@@ -26,7 +26,7 @@ if not os.path.exists(TEMP_FILE):
 if not os.path.exists(DATA_FILE):
     pd.DataFrame(columns=["날짜", "근무시간_h", "급여_원", "Tip_원", "합계_원"]).to_csv(DATA_FILE, index=False)
 
-# 세션 상태로 메뉴 관리 (자동 화면 전환용)
+# 세션 상태로 메뉴 관리
 if 'menu_index' not in st.session_state:
     st.session_state.menu_index = 0
 
@@ -35,8 +35,6 @@ with st.sidebar:
     st.title("📂 메뉴")
     menu_options = ["🚀 실시간 대시보드", "🧾 주급 정산소"]
     menu = st.radio("이동", menu_options, index=st.session_state.menu_index)
-    
-    # 메뉴 변경 시 세션 상태 동기화
     st.session_state.menu_index = menu_options.index(menu)
     
     st.write(f"현재 시급: **{HOURLY_WAGE:,}원**")
@@ -51,23 +49,32 @@ if menu == "🚀 실시간 대시보드":
     is_working = not temp_df.empty
 
     if is_working:
-        calc_time = str(temp_df.iloc[-1]["출근시간"]) # 여기엔 항상 20:00 혹은 입력시간이 들어감
-        start_dt = datetime.strptime(f"{datetime.now().date()} {calc_time}", "%Y-%m-%d %H:%M")
+        calc_time = str(temp_df.iloc[-1]["출근시간"])
         now = datetime.now()
+        start_dt = datetime.strptime(f"{now.date()} {calc_time}", "%Y-%m-%d %H:%M")
         
-        # 새벽 근무 보정
-        if now < start_dt - timedelta(hours=5): 
+        # 새벽 근무 보정 (현재 새벽인데 출근은 밤 20시 등일 때)
+        if now < start_dt - timedelta(hours=6): 
             start_dt -= timedelta(days=1)
             
-        elapsed = now - start_dt
-        worked_hours = max(elapsed.total_seconds() / 3600, 0)
-        current_money = int(worked_hours * HOURLY_WAGE)
+        # --- 시간 계산 로직 (중요!) ---
+        if now < start_dt:
+            # 아직 출근 시간 전인 경우
+            worked_hours = 0.0
+            current_money = 0
+            status_msg = f"⏳ {calc_time} 근무 시작 대기 중"
+        else:
+            # 출근 시간 이후인 경우
+            elapsed = now - start_dt
+            worked_hours = elapsed.total_seconds() / 3600
+            current_money = int(worked_hours * HOURLY_WAGE)
+            status_msg = f"🔥 현재 {worked_hours:.1f}시간째 근무 중"
 
         st.markdown(f"""
             <div class="earn-box">
                 <p style="margin-bottom:5px; color:#555;">💰 {calc_time} 출근 기준</p>
                 <h1 style="color:#27ae60; font-size:3.2em; margin:0;">{current_money:,} 원</h1>
-                <p style="color:#888; margin-top:10px;">현재 {worked_hours:.1f}시간째 근무 중</p>
+                <p style="color:#888; margin-top:10px;">{status_msg}</p>
             </div>
         """, unsafe_allow_html=True)
         st.write("")
@@ -82,14 +89,14 @@ if menu == "🚀 실시간 대시보드":
 
         st.markdown('<div class="off-section">', unsafe_allow_html=True)
         if st.button("🚨 퇴근하고 주급 정산소로 저장"):
-            off_dt = datetime.now().replace(hour=off_h, minute=off_min, second=0, microsecond=0)
+            off_dt = now.replace(hour=off_h, minute=off_min, second=0, microsecond=0)
             if off_dt <= start_dt: off_dt += timedelta(days=1)
             
             final_hours = round((off_dt - start_dt).total_seconds() / 3600, 1)
             final_wage = int(final_hours * HOURLY_WAGE)
             
             new_record = pd.DataFrame([[
-                datetime.now().date().strftime("%m/%d"), 
+                now.strftime("%m/%d"), 
                 final_hours, final_wage, tip_val, (final_wage + tip_val)
             ]], columns=["날짜", "근무시간_h", "급여_원", "Tip_원", "합계_원"])
             
@@ -97,7 +104,7 @@ if menu == "🚀 실시간 대시보드":
             pd.concat([data_df, new_record], ignore_index=True).to_csv(DATA_FILE, index=False)
             
             os.remove(TEMP_FILE)
-            st.session_state.menu_index = 1 # 정산소로 화면 전환 설정
+            st.session_state.menu_index = 1
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -106,17 +113,14 @@ if menu == "🚀 실시간 대시보드":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🚀 20:00 정시 출근"):
-                # 실제 몇 시에 누르든 파일에는 20:00로 저장
-                pd.DataFrame([[datetime.now().date(), "20:00"]], 
-                             columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
+                pd.DataFrame([[datetime.now().date(), "20:00"]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
                 st.rerun()
         with col2:
             with st.popover("➕ 정시 외 출근"):
                 h = st.number_input("시", 0, 23, 19); m = st.number_input("분", 0, 59, 0)
                 input_time = f"{h:02d}:{m:02d}"
                 if st.button("입력 시간 출근"):
-                    pd.DataFrame([[datetime.now().date(), input_time]], 
-                                 columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
+                    pd.DataFrame([[datetime.now().date(), input_time]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
                     st.rerun()
         st.info("20:00 이전 언제든 버튼을 눌러도 급여는 20:00부터 계산됩니다.")
 
@@ -124,25 +128,17 @@ if menu == "🚀 실시간 대시보드":
 elif menu == "🧾 주급 정산소":
     st.title("🧾 주급 정산소")
     data_df = pd.read_csv(DATA_FILE)
-    
     if data_df.empty:
         st.warning("아직 저장된 정산 기록이 없습니다.")
     else:
-        # 합계 행 계산
         total_h = data_df["근무시간_h"].sum()
-        total_wage = data_df["급여_원"].sum()
-        total_tip = data_df["Tip_원"].sum()
         total_all = data_df["합계_원"].sum()
         
-        # 테이블 표시
         st.table(data_df)
-        
-        # 요약 대시보드
         st.markdown(f"""
             <div style="background-color:#f8f9fa; padding:20px; border-radius:15px; border:1px solid #dee2e6;">
                 <h3 style="margin-top:0;">📊 이번 주 누적 합계</h3>
-                <p style="font-size:1.1em; margin-bottom:5px;">총 근무: <b>{total_h:.1f}시간</b></p>
-                <p style="font-size:1.1em; margin-bottom:5px;">기본급: <b>{total_wage:,}원</b> | 팁: <b>{total_tip:,}원</b></p>
+                <p style="font-size:1.1em;">총 근무: <b>{total_h:.1f}시간</b></p>
                 <h2 style="color:#27ae60; margin-top:10px;">총 예상 수령액: {total_all:,}원</h2>
             </div>
         """, unsafe_allow_html=True)
