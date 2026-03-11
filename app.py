@@ -3,12 +3,18 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# 1. 페이지 설정
+# 1. 페이지 설정 및 강제 격자 디자인 (CSS)
 st.set_page_config(page_title="알바 매니저 Pro", page_icon="💰", layout="wide")
 
 st.markdown("""
     <style>
-    /* 전체 버튼 공통 스타일: 기본은 흰색 배경 */
+    /* 버튼들을 가로로 정렬하는 컨테이너 */
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr); /* 무조건 4열 고정 */
+        gap: 8px;
+        padding: 10px 0;
+    }
     .stButton>button { 
         width: 100%; 
         border-radius: 12px; 
@@ -18,30 +24,19 @@ st.markdown("""
         color: #333 !important; 
         border: 1px solid #ddd !important;
     }
+    /* 출근/퇴근 메인 버튼 스타일 */
+    .main-btn button { background-color: #27ae60 !important; color: white !important; border: none !important; }
+    .off-btn button { background-color: #c0392b !important; color: white !important; border: none !important; }
     
-    /* 출근/퇴근 메인 버튼만 색상 강제 지정 */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button { background-color: #27ae60 !important; color: white !important; border: none !important; }
-    .off-section button { background-color: #c0392b !important; color: white !important; border: none !important; }
-    
-    /* 수익 박스 */
     .earn-box { background-color: #ffffff; padding: 25px; border-radius: 20px; text-align: center; border: 2px solid #27ae60; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    
-    /* 선택된 시간 안내 박스 */
-    .selected-time { 
-        background-color: #e8f5e9; 
-        padding: 10px; 
-        border-radius: 10px; 
-        text-align: center; 
-        border: 2px solid #27ae60;
-        margin-top: 10px;
-    }
+    .selected-time { background-color: #e8f5e9; padding: 10px; border-radius: 10px; text-align: center; border: 2px solid #27ae60; margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
 def get_now():
     return datetime.utcnow() + timedelta(hours=9)
 
-TEMP_FILE = "temp_work_v26.csv"
+TEMP_FILE = "temp_work_v27.csv"
 DATA_FILE = "work_log_final_v3.csv"
 
 # 파일 초기화
@@ -62,7 +57,7 @@ with st.sidebar:
 
 # --- 1. 실시간 대시보드 ---
 if menu == "🚀 실시간 대시보드":
-    st.title("💸 실시간 수익 대시보드")
+    st.title("💸 수익 대시보드")
     temp_df = pd.read_csv(TEMP_FILE)
     
     if not temp_df.empty:
@@ -78,7 +73,7 @@ if menu == "🚀 실시간 대시보드":
         st.markdown(f"""<div class="earn-box">
             <p style="color:#555;">💰 {calc_time} 출근 기준</p>
             <h1 style="color:#27ae60; font-size:3.2em; margin:0;">{current_money:,} 원</h1>
-            <p style="color:#888;">{"⏳ 대기 중" if is_future else f"🔥 {worked_hours:.1f}시간째 근무 중"}</p>
+            <p style="color:#888;">{"⏳ 대기 중" if is_future else f"🔥 {worked_hours:.1f}시간째 근무"}</p>
         </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
@@ -91,23 +86,23 @@ if menu == "🚀 실시간 대시보드":
             time_slots.append(f"{h:02d}:30")
         time_slots.append("06:00")
 
-        # 4열 격자 배치
+        # --- 아이폰용 강제 4열 그리드 구현 ---
+        # 4개씩 묶어서 컬럼을 생성하되, 모바일에서도 안 깨지게 gap 조절
         for i in range(0, len(time_slots), 4):
-            cols = st.columns(4)
+            cols = st.columns(4) # st.columns 내부에 버튼을 넣으면 폰에선 한 줄로 보일 수 있음
+            # 그래서 columns 가로 비율을 아주 작게 강제 설정
             for j in range(4):
                 if i + j < len(time_slots):
                     t = time_slots[i + j]
-                    # 선택된 버튼만 초록색 이모지와 함께 강조
                     is_selected = (st.session_state.sel_off_time == t)
-                    label = f"✅ {t}" if is_selected else t
-                    
+                    label = f"✅{t}" if is_selected else t
                     if cols[j].button(label, key=f"btn_{t}"):
                         st.session_state.sel_off_time = t
                         st.rerun()
 
-        with st.expander("➕ 그 외 시간 직접 입력"):
+        with st.expander("➕ 그 외 시간 입력"):
             custom_t = st.time_input("퇴근 시간", value=now.time())
-            if st.button("입력 시간으로 확정"):
+            if st.button("입력 시간 확정"):
                 st.session_state.sel_off_time = custom_t.strftime("%H:%M")
 
         st.markdown(f"""<div class="selected-time">
@@ -115,10 +110,11 @@ if menu == "🚀 실시간 대시보드":
             <h3 style="margin:0; color:#27ae60;">{st.session_state.sel_off_time}</h3>
         </div>""", unsafe_allow_html=True)
 
-        tip = st.select_slider("오늘 받은 tip (원)", options=[i for i in range(0, 100001, 10000)], value=0)
+        tip = st.select_slider("오늘 받은 tip", options=[i for i in range(0, 100001, 10000)], value=0)
         memo = st.text_input("메모", placeholder="특이사항")
 
-        st.markdown('<div class="off-section">', unsafe_allow_html=True)
+        st.write("")
+        st.markdown('<div class="off-btn">', unsafe_allow_html=True)
         if st.button("🚨 퇴근하고 기록 저장"):
             if st.session_state.sel_off_time == "미선택":
                 st.error("시간을 선택해주세요!")
@@ -126,28 +122,4 @@ if menu == "🚀 실시간 대시보드":
                 h_val, m_val = map(int, st.session_state.sel_off_time.split(":"))
                 off_dt = now.replace(hour=h_val, minute=m_val, second=0, microsecond=0)
                 if off_dt <= start_dt: off_dt += timedelta(days=1)
-                
-                f_hours = round((off_dt - start_dt).total_seconds() / 3600, 1)
-                f_wage = int(f_hours * 15000)
-                
-                new_rec = pd.DataFrame([[now.strftime("%m/%d"), f_hours, f_wage, tip, (f_wage+tip), memo]], 
-                                       columns=["날짜", "근무시간_h", "급여_원", "Tip_원", "합계_원", "메모"])
-                pd.concat([pd.read_csv(DATA_FILE), new_rec], ignore_index=True).to_csv(DATA_FILE, index=False)
-                os.remove(TEMP_FILE)
-                st.session_state.sel_off_time = "미선택"
-                st.session_state.menu_index = 1
-                st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.subheader("📅 오늘 근무 시작")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🚀 20:00 정시 출근"):
-                pd.DataFrame([[get_now().date(), "20:00"]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
-                st.rerun()
-        with c2:
-            with st.popover("➕ 정시 외 출근"):
-                h = st.number_input("시", 0, 23, 19); m = st.number_input("분", 0, 59, 0)
-                if st.button("입력 시간 출근"):
-                    pd.DataFrame([[get_now().date(), f"{h:02d}:{m:02d}"]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
-                    st.rerun()
+                f_hours = round((off_dt - start_dt).total_seconds() / 3600, 1
