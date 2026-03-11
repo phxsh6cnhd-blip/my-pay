@@ -1,13 +1,3 @@
-아, 원인을 찾았어! 에러 메시지를 보니 st.markdown 부분에서 문제가 생겼네.
-
-파이썬 버전이 업데이트되면서 unsafe_allow_stdio=True라는 옵션이 더 이상 지원되지 않거나 오타가 난 것 같아. 보통 HTML/CSS를 넣을 때는 unsafe_allow_html=True라고 써야 하거든. 이 부분만 살짝 고쳐주면 바로 해결될 거야!
-
-그리고 퇴근하기 버튼을 눌렀을 때 그냥 초기화되는 게 아니라, 네가 아까 원했던 대로 실제 일한 시간과 팁(tip)을 합쳐서 주급 정산소로 넘기는 로직까지 완성해서 보내줄게.
-
-🛠️ TypeError 해결 및 통합 저장 버전 (app.py)
-이 코드로 다시 Commit changes 해봐. 이번엔 에러 없이 깔끔하게 돌아갈 거야!
-
-Python
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -127,3 +117,4 @@ with st.sidebar:
     if st.button("🧹 강제 데이터 리셋"):
         if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
         st.rerun()
+
