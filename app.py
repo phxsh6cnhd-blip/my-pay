@@ -6,19 +6,10 @@ import os
 # 1. 페이지 설정
 st.set_page_config(page_title="알바 매니저 Pro", page_icon="💰", layout="wide")
 
-# CSS: 아이폰에서도 무조건 가로 4열로 정렬되게 강제함
+# CSS: 색상 복구 및 아이폰 4열 강제 고정
 st.markdown("""
     <style>
-    /* 버튼 컨테이너를 가로로 배치 */
-    [data-testid="column"] {
-        min-width: 22% !important; 
-        flex: 1 1 22% !important;
-    }
-    div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: wrap !important;
-        display: flex !important;
-    }
+    /* 1. 기본 버튼 스타일 (흰색) */
     .stButton>button { 
         width: 100%; 
         border-radius: 10px; 
@@ -28,12 +19,33 @@ st.markdown("""
         color: #333 !important; 
         border: 1px solid #ddd !important;
         font-size: 0.85em !important;
-        padding: 0px !important;
     }
-    /* 메인 버튼 스타일 */
-    .main-btn button { background-color: #27ae60 !important; color: white !important; border: none !important; }
-    .off-btn button { background-color: #c0392b !important; color: white !important; border: none !important; }
-    
+
+    /* 2. 출근 버튼 (초록색 강제 적용) */
+    div.main-btn .stButton > button {
+        background-color: #27ae60 !important;
+        color: white !important;
+        border: none !important;
+    }
+
+    /* 3. 퇴근 버튼 (빨간색 강제 적용) */
+    div.off-btn .stButton > button {
+        background-color: #c0392b !important;
+        color: white !important;
+        border: none !important;
+    }
+
+    /* 4. 아이폰 가로 4열 배치 강제 */
+    div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+    }
+    div[data-testid="column"] {
+        min-width: 22% !important;
+        flex: 1 1 22% !important;
+    }
+
     .earn-box { background-color: #ffffff; padding: 20px; border-radius: 20px; text-align: center; border: 2px solid #27ae60; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .selected-time { background-color: #e8f5e9; padding: 10px; border-radius: 10px; text-align: center; border: 2px solid #27ae60; margin-top: 10px; }
     </style>
@@ -42,13 +54,11 @@ st.markdown("""
 def get_now():
     return datetime.utcnow() + timedelta(hours=9)
 
-TEMP_FILE = "temp_work_v29.csv"
+TEMP_FILE = "temp_work_v30.csv"
 DATA_FILE = "work_log_final_v3.csv"
 
-# 괄호 오류 수정 완료!
 for f, cols in [(TEMP_FILE, ["날짜", "출근시간"]), (DATA_FILE, ["날짜", "근무시간_h", "급여_원", "Tip_원", "합계_원", "메모"])]:
-    if not os.path.exists(f): 
-        pd.DataFrame(columns=cols).to_csv(f, index=False)
+    if not os.path.exists(f): pd.DataFrame(columns=cols).to_csv(f, index=False)
 
 if 'menu_index' not in st.session_state: st.session_state.menu_index = 0
 if 'sel_off_time' not in st.session_state: st.session_state.sel_off_time = "미선택"
@@ -92,7 +102,7 @@ if menu == "🚀 실시간 대시보드":
             time_slots.append(f"{h:02d}:30")
         time_slots.append("06:00")
 
-        # 아이폰 강제 4열 정렬
+        # 4열 격자
         for i in range(0, len(time_slots), 4):
             cols = st.columns(4)
             for j in range(4):
@@ -118,14 +128,13 @@ if menu == "🚀 실시간 대시보드":
 
         st.write("")
         st.markdown('<div class="off-btn">', unsafe_allow_html=True)
-        if st.button("🚨 퇴근하고 기록 저장"):
+        if st.button("🚨 퇴근하고 주급 정산소로 저장"):
             if st.session_state.sel_off_time == "미선택":
                 st.error("시간을 선택해주세요!")
             else:
                 h_val, m_val = map(int, st.session_state.sel_off_time.split(":"))
                 off_dt = now.replace(hour=h_val, minute=m_val, second=0, microsecond=0)
                 if off_dt <= start_dt: off_dt += timedelta(days=1)
-                
                 f_hours = round((off_dt - start_dt).total_seconds() / 3600, 1)
                 f_wage = int(f_hours * 15000)
                 new_rec = pd.DataFrame([[now.strftime("%m/%d"), f_hours, f_wage, tip, (f_wage+tip), memo]], 
