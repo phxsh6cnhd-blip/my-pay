@@ -162,8 +162,22 @@ elif menu == "🧾 주급 정산소":
     if df.empty:
         st.warning("아직 저장된 기록이 없습니다.")
     else:
-        st.markdown(f"### 📊 이번 주 총 수익: {df['합계_원'].sum():,} 원")
+        # 합계 계산
+        total_revenue = df['합계_원'].sum()
+        total_hours = df['근무시간_h'].sum()
         
+        # 상단에 수익과 시간 합계를 나란히 표시
+        col_sum1, col_sum2 = st.columns(2)
+        with col_sum1:
+            st.metric("💰 이번 주 총 수익", f"{total_revenue:,} 원")
+        with col_sum2:
+            st.metric("⏱️ 총 근무 시간", f"{total_hours:.1f} 시간")
+            
+        st.markdown("---")
+        
+        # 최근 기록 표시 (최신순)
+        for i, row in df.sort_index(ascending=False).iterrows():
+            # (이하 기존 expander 및 수정/삭제 로직 동일)
         # 최신 기록이 위로 오게 표시
         for i, row in df.sort_index(ascending=False).iterrows():
             with st.expander(f"📅 {row['날짜']} | {row['근무시간_h']}h | {row['합계_원']:,}원"):
@@ -182,3 +196,4 @@ elif menu == "🧾 주급 정산소":
                 if st.button(f"🗑️ 기록 삭제", key=f"del_{i}"):
                     df.drop(i).reset_index(drop=True).to_csv(DATA_FILE, index=False)
                     st.rerun()
+
