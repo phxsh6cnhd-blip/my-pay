@@ -24,7 +24,7 @@ TEMP_FILE = "temp_work_data.csv"
 DATA_FILE = "work_history_database.csv"
 HOURLY_WAGE = 15000
 
-# 파일 초기화 함수
+# 파일 초기화
 def init_files():
     if not os.path.exists(TEMP_FILE):
         pd.DataFrame(columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
@@ -40,20 +40,15 @@ with st.sidebar:
     st.title("📂 메뉴")
     menu = st.radio("이동", ["🚀 실시간 대시보드", "🧾 주급 정산소"], index=st.session_state.menu_index)
     st.session_state.menu_index = ["🚀 실시간 대시보드", "🧾 주급 정산소"].index(menu)
-    
     st.write("---")
-    # [부활] 데이터 강제 리셋 버튼
-    if st.button("🧹 데이터 강제 리셋 (전체삭제)"):
+    if st.button("🧹 데이터 강제 리셋"):
         if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
         if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
-        st.cache_resource.clear()
         st.rerun()
-    
-    # [유지] 백업 버튼
     if os.path.exists(DATA_FILE):
         df_bak = pd.read_csv(DATA_FILE)
         csv_data = df_bak.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 내역 백업(CSV)", csv_data, f"pay_backup_{get_now().strftime('%m%d')}.csv", "text/csv")
+        st.download_button("📥 내역 백업(CSV)", csv_data, f"pay_backup.csv", "text/csv")
 
 # --- 1. 실시간 대시보드 ---
 if menu == "🚀 실시간 대시보드":
@@ -67,13 +62,12 @@ if menu == "🚀 실시간 대시보드":
         now = get_now()
         start_dt = datetime.strptime(f"{calc_date} {calc_time}", "%Y-%m-%d %H:%M")
         
-        # 24시간 제한 로직
         diff_sec = max(0, min((now - start_dt).total_seconds(), 86400))
         current_money = int((diff_sec / 3600) * HOURLY_WAGE)
         worked_hours_display = diff_sec / 3600
 
         st.markdown(f"""<div class="earn-box">
-            <p style="color:#555; font-size:1.1em;">💰 {calc_date} {calc_time} 출근 기준</p>
+            <p style="color:#555; font-size:1.1em;">💰 {calc_date} {calc_time} 출근 기록 중</p>
             <h1 style="color:#27ae60; font-size:3.5em; margin:10px 0;">{current_money:,} 원</h1>
             <p style="color:#888;">{f"🔥 실시간 근무 현황" if start_dt.date() == now.date() else "📅 과거 기록 모드"}</p>
         </div>""", unsafe_allow_html=True)
@@ -83,7 +77,7 @@ if menu == "🚀 실시간 대시보드":
         time_options = [f"{h:02d}:{m}" for h in range(24) for m in ["00", "30"]]
         sel_off_time = st.selectbox("퇴근 시간 선택", time_options, index=0)
         tip = st.select_slider("오늘 받은 tip", options=[i for i in range(0, 100001, 10000)], value=0)
-        memo = st.text_input("메모", placeholder="특이사항 입력")
+        memo = st.text_input("메모", placeholder="특이사항")
 
         if st.button("🚨 기록 저장 및 퇴근하기"):
             h_val, m_val = map(int, sel_off_time.split(":"))
@@ -101,14 +95,31 @@ if menu == "🚀 실시간 대시보드":
             if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
             st.session_state.menu_index = 1
             st.rerun()
+
     else:
+        # --- 출근 전 화면 ---
         st.subheader("📅 근무 시작")
-        sel_date = st.date_input("근무 날짜", value=get_now().date())
+        sel_date = st.date_input("근무 날짜 선택", value=get_now().date())
+        
         st.markdown('<div class="big-start-btn">', unsafe_allow_html=True)
-        if st.button(f"🚀 {sel_date.strftime('%m/%d')} 20:00 정시 출근 등록", type="primary"):
+        # 1. 정시 출근 버튼
+        if st.button(f"🚀 {sel_date.strftime('%m/%d')} 20:00 정시 출근", type="primary"):
             pd.DataFrame([[sel_date, "20:00"]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.write("")
+        
+        # [복구] 2. 그 외 시간 직접 입력 버튼 (팝오버)
+        with st.popover("➕ 그 외 출근 시간 직접 입력"):
+            st.write(f"📅 선택된 날짜: {sel_date}")
+            col_h, col_m = st.columns(2)
+            with col_h: h = st.number_input("시 (0-23)", 0, 23, 19)
+            with col_m: m = st.number_input("분 (0-59)", 0, 59, 0)
+            
+            if st.button("입력한 시간으로 출근 기록"):
+                pd.DataFrame([[sel_date, f"{h:02d}:{m:02d}"]], columns=["날짜", "출근시간"]).to_csv(TEMP_FILE, index=False)
+                st.rerun()
 
 # --- 2. 주급 정산소 ---
 elif menu == "🧾 주급 정산소":
@@ -116,22 +127,19 @@ elif menu == "🧾 주급 정산소":
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         if df.empty:
-            st.warning("저장된 내역이 없습니다.")
+            st.warning("내역이 없습니다.")
         else:
-            # 1. 상단 요약
             total_rev = df['합계_원'].sum()
             total_hrs = df['근무시간_h'].sum()
             c1, c2 = st.columns(2)
             c1.metric("💰 이번 주 총 수익", f"{total_rev:,} 원")
             c2.metric("⏱️ 총 근무 시간", f"{total_hrs:.1f} 시간")
             st.write("---")
-
-            # 2. 상세 리스트 (이 부분 절대 누락 안 함!)
             st.subheader("🗓️ 상세 근무 기록")
             for i, row in df.sort_index(ascending=False).iterrows():
                 with st.expander(f"📅 {row['날짜']} | {row['근무시간_h']}h | {row['합계_원']:,}원"):
-                    with st.form(f"edit_form_{i}"):
-                        u_h = st.number_input("시간 수정", value=float(row['근무시간_h']), step=0.1, max_value=24.0)
+                    with st.form(f"edit_f_{i}"):
+                        u_h = st.number_input("시간 수정", value=float(row['근무시간_h']), step=0.1)
                         u_t = st.number_input("Tip 수정", value=int(row['Tip_원']), step=1000)
                         u_m = st.text_input("메모", value=str(row['메모']) if pd.notna(row['메모']) else "")
                         if st.form_submit_button("💾 수정 저장"):
@@ -142,6 +150,6 @@ elif menu == "🧾 주급 정산소":
                             df.at[i, '메모'] = u_m
                             df.to_csv(DATA_FILE, index=False)
                             st.rerun()
-                    if st.button(f"🗑️ 삭제", key=f"del_btn_{i}"):
+                    if st.button(f"🗑️ 삭제", key=f"del_{i}"):
                         df.drop(i).reset_index(drop=True).to_csv(DATA_FILE, index=False)
                         st.rerun()
